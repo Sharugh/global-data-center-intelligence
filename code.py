@@ -3533,7 +3533,12 @@ def detect_sentiment(text):
     if any(w in t for w in ["proposed", "plans", "eyes", "looks to", "could build",
                              "may build", "files for", "announces plans"]):
         return "Proposed"
-    if any(w in t for w in ["rejected", "denied", "moratorium", "blocked",
+    if any(w in t for w in ["moratorium", "pause on permits", "permit freeze",
+                             "halts new data center", "halts new data centre",
+                             "suspends data center", "suspends data centre",
+                             "freeze on data center", "freeze on data centre"]):
+        return "Moratorium"
+    if any(w in t for w in ["rejected", "denied", "blocked",
                              "lawsuit", "sues", "opposition", "withdrawn"]):
         return "Challenged"
     if any(w in t for w in ["under construction", "construction begins",
@@ -4222,11 +4227,18 @@ def generate_local_summary(df, sel_desc, date_range):
     reg_df  = df2[df2["Topic"] == "Permits"]
     chall_df= df2[df2["Sentiment"] == "Challenged"]
     appr_df = df2[df2["Sentiment"] == "Approved"]
+    mora_df = df2[df2["Sentiment"] == "Moratorium"]
 
     reg_intro = (
         f"Permitting and regulatory dynamics account for {len(reg_df)} articles "
         f"({pct(len(reg_df))}) in the current selection. "
     )
+    if len(mora_df) > 0:
+        reg_intro += (
+            f"Moratoriums or grid/permit freezes are reported in {len(mora_df)} articles, "
+            f"signaling {'significant' if len(mora_df) > 3 else 'localized'} regulatory pushback "
+            f"against new data center capacity in the affected markets. "
+        )
     if len(chall_df) > 0:
         reg_intro += (
             f"Contested or blocked projects number {len(chall_df)}, "
@@ -4235,10 +4247,10 @@ def generate_local_summary(df, sel_desc, date_range):
         )
     if len(appr_df) > 0:
         reg_intro += f"Approvals recorded: {len(appr_df)} projects cleared planning in the period. "
-    if reg_df.empty and chall_df.empty:
+    if reg_df.empty and chall_df.empty and mora_df.empty:
         reg_intro += "No specific permitting friction or approval events detected in the current filter."
 
-    reg_bullets = ["• " + h for h in hl(pd.concat([reg_df, chall_df, appr_df]).drop_duplicates(), 8)]
+    reg_bullets = ["• " + h for h in hl(pd.concat([reg_df, chall_df, appr_df, mora_df]).drop_duplicates(), 8)]
     if not reg_bullets:
         reg_bullets = ["• No permitting-specific articles in current selection."]
 
@@ -5073,7 +5085,7 @@ def chart_sentiment(df):
     sent_colors = {
         "Opened / Live": "#00e676", "Approved": "#00b4ff",
         "Proposed": "#ffaa00", "Under Construction": "#00e5c8",
-        "Challenged": "#ff2d6b", "News": "#2e4470",
+        "Moratorium": "#ff8c00", "Challenged": "#ff2d6b", "News": "#2e4470",
     }
     colors = [sent_colors.get(s, "#2e4470") for s in sc["Sentiment"]]
     fig = go.Figure(go.Bar(
@@ -5302,7 +5314,7 @@ def dark_table(df_in, max_rows=300):
             elif col == "Sentiment":
                 sent_c = {
                     "Opened / Live":"#00e676","Approved":"#00b4ff","Proposed":"#ffaa00",
-                    "Under Construction":"#00e5c8","Challenged":"#ff2d6b","News":"#2e4470",
+                    "Under Construction":"#00e5c8","Moratorium":"#ff8c00","Challenged":"#ff2d6b","News":"#2e4470",
                 }.get(v, "#2e4470")
                 cells += (
                     f'<td style="{td}background:{bg};">'
@@ -5359,7 +5371,7 @@ def article_card(headline, date, url, source, country, topic, capacity, deal, se
     ) if deal else ""
     sent_c = {
         "Opened / Live":"#00e676","Approved":"#00b4ff","Proposed":"#ffaa00",
-        "Under Construction":"#00e5c8","Challenged":"#ff2d6b","News":"#2e4470",
+        "Under Construction":"#00e5c8","Moratorium":"#ff8c00","Challenged":"#ff2d6b","News":"#2e4470",
     }.get(sentiment, "#2e4470")
     arrow = "\u2197"
 
@@ -6499,7 +6511,7 @@ def main():
             # DC-only lists (safe defaults — never rendered in RE mode)
             all_topics_av    = sorted(TOPIC_COLORS.keys())
             all_sents_av     = ["Opened / Live", "Approved", "Proposed",
-                                 "Under Construction", "Challenged", "News"]
+                                 "Under Construction", "Moratorium", "Challenged", "News"]
             all_companies_av = KNOWN_COMPANIES
             _all_iso_in_data = []
         elif not _is_re_mode and _dc_loaded:
@@ -6522,7 +6534,7 @@ def main():
             all_countries_av = sorted(COUNTRY_TO_REGION.keys())
             all_topics_av    = sorted(TOPIC_COLORS.keys())
             all_sents_av     = ["Opened / Live", "Approved", "Proposed",
-                                 "Under Construction", "Challenged", "News"]
+                                 "Under Construction", "Moratorium", "Challenged", "News"]
             all_companies_av = KNOWN_COMPANIES
             _all_iso_in_data = []
 
@@ -8036,7 +8048,7 @@ def main():
             def _quick_score(row):
                 score = 0.0
                 hl = str(row.get("Headline", "")).lower()
-                sent_w = {"Opened / Live":10,"Approved":8,"Under Construction":6,"Proposed":4,"Challenged":5,"News":2}
+                sent_w = {"Opened / Live":10,"Approved":8,"Under Construction":6,"Proposed":4,"Moratorium":7,"Challenged":5,"News":2}
                 score += sent_w.get(row.get("Sentiment","News"), 2)
                 cap = str(row.get("Capacity",""))
                 if cap:
@@ -8971,7 +8983,7 @@ def main():
                 # 1. Sentiment weight
                 sent_w = {
                     "Opened / Live": 10, "Approved": 8, "Under Construction": 6,
-                    "Proposed": 4, "Challenged": 5, "News": 2,
+                    "Proposed": 4, "Moratorium": 7, "Challenged": 5, "News": 2,
                 }
                 score += sent_w.get(row.get("Sentiment", "News"), 2)
 
